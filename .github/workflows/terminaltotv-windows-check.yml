@@ -1,0 +1,96 @@
+# Temporary: validates TerminalToTV on a real Windows machine. Removed again before merge.
+name: TerminalToTV Windows check
+on:
+  push:
+    branches: [claude/trading-terminal-tv-display-y5dql2]
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Compile with Windows PowerShell 5.1 (warnings would fail this) and PowerShell 7
+        shell: powershell
+        run: |
+          $src = [IO.File]::ReadAllText("$PWD\TerminalToTV\TerminalToTV.ps1")
+          $tokens = $null; $errors = $null
+          [void][System.Management.Automation.Language.Parser]::ParseInput($src, [ref]$tokens, [ref]$errors)
+          "parse errors: $($errors.Count)"; if ($errors.Count) { $errors; exit 1 }
+          $code = [regex]::Match($src, "(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value
+          Add-Type -TypeDefinition $code
+          "PowerShell $($PSVersionTable.PSVersion): compiled OK, no warnings"
+          pwsh -NoProfile -Command "Add-Type -TypeDefinition ([regex]::Match([IO.File]::ReadAllText('$PWD\TerminalToTV\TerminalToTV.ps1'), `"(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@`").Groups[1].Value); 'PowerShell ' + `$PSVersionTable.PSVersion + ': compiled OK'"
+          if ($LASTEXITCODE) { exit 1 }
+
+      - name: Install and start MetaTrader 5 (+ Notepad as another window)
+        shell: powershell
+        timeout-minutes: 10
+        run: |
+          $setup = "$env:RUNNER_TEMP\mt5setup.exe"
+          Invoke-WebRequest 'https://download.mql5.com/cdn/web/metaquotes.software.corp/mt5/mt5setup.exe' -OutFile $setup
+          Start-Process $setup -ArgumentList '/auto' -Wait
+          $exe = Get-ChildItem 'C:\Program Files\MetaTrader 5*\terminal64.exe' | Select-Object -First 1
+          "terminal64: $($exe.FullName)"
+          if (-not (Get-Process terminal64 -ErrorAction SilentlyContinue)) { Start-Process $exe.FullName }
+          Start-Process notepad.exe
+          Start-Sleep -Seconds 40
+          $src = [IO.File]::ReadAllText("$PWD\TerminalToTV\TerminalToTV.ps1")
+          Add-Type -IgnoreWarnings -TypeDefinition ([regex]::Match($src, "(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value)
+          [TerminalToTV.Native]::GetWindows() | Format-Table ProcessName, ClassName, IsCloaked, IsToolWindow, Title -AutoSize | Out-String -Width 250
+
+      - name: Scenarios with real MT5 and real keyboard input
+        shell: powershell
+        run: |
+          $ps1 = "$PWD\TerminalToTV\TerminalToTV.ps1"
+          $memory = "$env:LOCALAPPDATA\TerminalToTV\terminal.txt"
+          $fail = 0
+          function Check($name, $out, [string[]]$mustContain) {
+            "==================== $name"
+            $out
+            foreach ($m in $mustContain) {
+              if ($out -notlike "*$m*") { "   MISSING: $m"; $script:fail++ } else { "   ok: $m" }
+            }
+          }
+          function RunPs($stdin, $arguments) {
+            $cmd = if ($stdin) { "($stdin)| powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$ps1`" $arguments" } else { "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$ps1`" $arguments < nul" }
+            cmd.exe /c $cmd 2>&1 | Out-String
+          }
+
+          # The reported bug: $Match 'Kalpana' matches nothing -> must continue with the (only) MT5 terminal
+          Check 'match-miss (reported bug)' (RunPs '' '-Match Kalpana -WaitSeconds 3') @("'Kalpana' endha terminal", 'Terminal: MetaTrader 5', 'TV innum connect aagala', 'seconds-la TV connect aagala')
+
+          # -Choose with one terminal: list + [0] option; pick 1 -> remembered
+          Check 'choose -> 1' (RunPs 'echo 1' '-Choose -WaitSeconds 3') @('Endha terminal TV-ku poganum?', '[1] MetaTrader 5', '[0] Vera window', 'Sari! Adutha thadava', 'Terminal: MetaTrader 5')
+          "memory file: " + ((Get-Content $memory) -join ' | ')
+          if ((Get-Content $memory)[0] -notlike '*terminal64.exe') { '   MISSING: memory should hold terminal64.exe'; $fail++ }
+
+          # Next run: no question, remembered terminal
+          Check 'remembered' (RunPs '' '-WaitSeconds 3') @('Munnaadi select panna terminal', 'Terminal: MetaTrader 5')
+
+          # -Choose, 0 = other windows, then pick Notepad by its number
+          $out = RunPs '(echo 0& echo 99)' '-Choose -WaitSeconds 3'
+          $line = ($out -split "`r?`n" | Where-Object { $_ -match '^\s+\[(\d+)\] .*Notepad' } | Select-Object -Last 1)
+          $n = [regex]::Match($line, '\[(\d+)\]').Groups[1].Value
+          "notepad is number $n in the other-windows list"
+          Check 'choose -> 0 -> notepad' (RunPs "(echo 0& echo $n)" '-Choose -WaitSeconds 3') @('Open-ah irukkura mathha windows', 'Terminal: Untitled - Notepad')
+          Check 'remembered notepad' (RunPs '' '-WaitSeconds 3') @('Munnaadi select panna terminal', 'Terminal: Untitled - Notepad')
+
+          # Bad answer stops cleanly
+          Check 'bad answer' (RunPs 'echo x' '-Choose -WaitSeconds 3') @("list-la illadha number")
+
+          # Launchers: choose.bat then the normal .bat (pause must not hang)
+          Check 'choose.bat' (cmd.exe /c "echo 1| TerminalToTV\TerminalToTV-choose.bat -WaitSeconds 3" 2>&1 | Out-String) @('Endha terminal TV-ku poganum?', 'Terminal: MetaTrader 5', 'Press any key')
+          Check 'main .bat' (cmd.exe /c "TerminalToTV\TerminalToTV.bat -WaitSeconds 3 < nul" 2>&1 | Out-String) @('Munnaadi select panna terminal', 'Terminal: MetaTrader 5')
+
+          # The MT5 window really moves (to the only screen here)
+          $src = [IO.File]::ReadAllText($ps1)
+          Add-Type -IgnoreWarnings -TypeDefinition ([regex]::Match($src, "(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value)
+          $w = @([TerminalToTV.Native]::GetWindows() | Where-Object ClassName -like 'MetaQuotes::MetaTrader*')[0]
+          $d = @([TerminalToTV.Native]::GetDisplays())[0]
+          $r = [TerminalToTV.Native]::MoveToDisplay($w.Handle, $d.DeviceName)
+          "move real MT5 window -> '$r'"; if ($r) { $fail++ }
+
+          if ($fail) { "$fail checks failed"; exit 1 }
+          'all scenarios OK'
+          exit 0
