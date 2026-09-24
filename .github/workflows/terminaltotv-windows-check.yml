@@ -10,7 +10,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Compile with Windows PowerShell 5.1 (warnings would fail this) and PowerShell 7
+      - name: Compile with Windows PowerShell 5.1 (warnings would fail this)
         shell: powershell
         run: |
           $src = [IO.File]::ReadAllText("$PWD\TerminalToTV\TerminalToTV.ps1")
@@ -20,8 +20,13 @@ jobs:
           $code = [regex]::Match($src, "(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value
           Add-Type -TypeDefinition $code
           "PowerShell $($PSVersionTable.PSVersion): compiled OK, no warnings"
-          pwsh -NoProfile -Command "Add-Type -TypeDefinition ([regex]::Match([IO.File]::ReadAllText('$PWD\TerminalToTV\TerminalToTV.ps1'), `"(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@`").Groups[1].Value); 'PowerShell ' + `$PSVersionTable.PSVersion + ': compiled OK'"
-          if ($LASTEXITCODE) { exit 1 }
+
+      - name: Compile with PowerShell 7
+        shell: pwsh
+        run: |
+          $src = [IO.File]::ReadAllText("$PWD\TerminalToTV\TerminalToTV.ps1")
+          Add-Type -TypeDefinition ([regex]::Match($src, "(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value)
+          "PowerShell $($PSVersionTable.PSVersion): compiled OK"
 
       - name: Install and start MetaTrader 5 (+ Notepad as another window)
         shell: powershell
@@ -42,18 +47,18 @@ jobs:
       - name: Scenarios with real MT5 and real keyboard input
         shell: powershell
         run: |
-          $ps1 = "$PWD\TerminalToTV\TerminalToTV.ps1"
+          $ps1 = 'TerminalToTV\TerminalToTV.ps1'
           $memory = "$env:LOCALAPPDATA\TerminalToTV\terminal.txt"
           $fail = 0
           function Check($name, $out, [string[]]$mustContain) {
             "==================== $name"
             $out
             foreach ($m in $mustContain) {
-              if ($out -notlike "*$m*") { "   MISSING: $m"; $script:fail++ } else { "   ok: $m" }
+              if (-not $out.Contains($m)) { "   MISSING: $m"; $script:fail++ } else { "   ok: $m" }
             }
           }
           function RunPs($stdin, $arguments) {
-            $cmd = if ($stdin) { "($stdin)| powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$ps1`" $arguments" } else { "powershell.exe -NoProfile -ExecutionPolicy Bypass -File `"$ps1`" $arguments < nul" }
+            $cmd = if ($stdin) { "($stdin)| powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ps1 $arguments" } else { "powershell.exe -NoProfile -ExecutionPolicy Bypass -File $ps1 $arguments < nul" }
             cmd.exe /c $cmd 2>&1 | Out-String
           }
 
@@ -84,7 +89,7 @@ jobs:
           Check 'main .bat' (cmd.exe /c "TerminalToTV\TerminalToTV.bat -WaitSeconds 3 < nul" 2>&1 | Out-String) @('Munnaadi select panna terminal', 'Terminal: MetaTrader 5')
 
           # The MT5 window really moves (to the only screen here)
-          $src = [IO.File]::ReadAllText($ps1)
+          $src = [IO.File]::ReadAllText("$PWD\$ps1")
           Add-Type -IgnoreWarnings -TypeDefinition ([regex]::Match($src, "(?s)-TypeDefinition @'\r?\n(.*?)\r?\n'@").Groups[1].Value)
           $w = @([TerminalToTV.Native]::GetWindows() | Where-Object ClassName -like 'MetaQuotes::MetaTrader*')[0]
           $d = @([TerminalToTV.Native]::GetDisplays())[0]
