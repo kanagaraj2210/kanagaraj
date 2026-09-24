@@ -5,46 +5,52 @@
 .DESCRIPTION
     Windows Cast (Win+K) starts in "Duplicate" mode, so the TV mirrors everything on the PC.
     This script does the manual steps for you:
-      1. If the TV is not connected yet, it opens the Windows Cast panel and waits while you pick the TV.
-      2. It switches the TV from Duplicate (mirror) to Extend, so the TV becomes a separate second screen.
-      3. It moves the terminal window onto the TV and maximizes it there.
+      1. Finds the terminal. With several terminals open it asks once which one, and remembers it.
+      2. If the TV is not connected yet, it opens the Windows Cast panel and waits while you pick the TV.
+      3. It switches the TV from Duplicate (mirror) to Extend, so the TV becomes a separate second screen.
+      4. It moves the terminal window onto the TV and maximizes it there.
     Everything else stays on the PC screen. When you disconnect the TV, Windows moves the
     terminal back to the PC screen by itself.
 
     Works on Windows 10 and 11 with Windows Cast (Miracast) or an HDMI cable. Nothing to install.
 
 .PARAMETER Match
-    Only needed when more than one terminal is open: part of the terminal's folder path
-    (e.g. Kalpana) or of its window title (e.g. the account number).
-    If no MT5/MT4 terminal matches, any open window whose title contains this text is used.
+    Optional: part of the terminal's folder path or window title (e.g. the account number).
+    If nothing matches, the script shows the list of terminals instead of stopping.
 
 .PARAMETER Monitor
-    Only needed if the wrong screen is picked: the TV's number in the "Displays" list
+    Only needed if the wrong screen is picked: the TV's number in the "Screens" list
     this script prints, or part of the TV's name.
 
 .PARAMETER WaitSeconds
     How long to wait for the TV to connect after the Cast panel opens.
 
+.PARAMETER Choose
+    Ask again which terminal should go to the TV, instead of using the remembered one.
+
 .EXAMPLE
     .\TerminalToTV.ps1
 
 .EXAMPLE
-    .\TerminalToTV.ps1 -Match Kalpana
+    .\TerminalToTV.ps1 -Choose
 
 .EXAMPLE
     .\TerminalToTV.ps1 -Match 51234567 -Monitor 2
 #>
 [CmdletBinding()]
 param(
-    # Your terminal: part of its folder name or window title, e.g. 'Kalpana' or the account number.
-    # Can stay empty when only one MT5 terminal is open.
+    # Optional: part of the terminal's folder name or window title, e.g. the account number.
+    # Usually not needed - with several terminals open the script asks once and remembers.
     [string]$Match = '',
 
-    # Which screen is the TV: its number in the "Displays" list, or part of its name. Empty = automatic.
+    # Which screen is the TV: its number in the "Screens" list, or part of its name. Empty = automatic.
     [string]$Monitor = '',
 
     # Seconds to wait for the TV to connect after the Cast panel opens.
-    [int]$WaitSeconds = 90
+    [int]$WaitSeconds = 90,
+
+    # Ask again which terminal goes to the TV (TerminalToTV-choose.bat passes this).
+    [switch]$Choose
 )
 
 $ErrorActionPreference = 'Stop'
@@ -57,6 +63,9 @@ trap {
 
 # Process names of MetaTrader terminals: MT5, MT4.
 $TerminalProcessNames = @('terminal64', 'terminal')
+
+# The terminal picked from the list is remembered here for next time.
+$ChoiceFile = Join-Path $(if ($env:LOCALAPPDATA) { $env:LOCALAPPDATA } else { [IO.Path]::GetTempPath() }) 'TerminalToTV\terminal.txt'
 
 if (-not ('TerminalToTV.Native' -as [type])) {
     Add-Type -IgnoreWarnings -TypeDefinition @'
@@ -78,6 +87,8 @@ namespace TerminalToTV
         public string ProcessPath = "";   // e.g. "C:\Program Files\MetaTrader 5\terminal64.exe"
         public string Title = "";
         public string ClassName = "";
+        public bool IsCloaked;            // hidden by Windows (e.g. suspended Store apps, other virtual desktops)
+        public bool IsToolWindow;         // floating toolbars / popups, not real app windows
     }
 
     public class DisplayInfo
@@ -148,6 +159,8 @@ namespace TerminalToTV
                     window.ProcessName = Path.GetFileNameWithoutExtension(path).ToLowerInvariant();
                     window.Title = title.ToString();
                     window.ClassName = className.ToString();
+                    window.IsCloaked = IsCloaked(hWnd);
+                    window.IsToolWindow = (GetWindowLong(hWnd, GWL_EXSTYLE) & WS_EX_TOOLWINDOW) != 0;
                     windows.Add(window);
                 }
                 catch (Exception) { }
@@ -402,6 +415,16 @@ namespace TerminalToTV
             return DisplayConfigGetDeviceInfo(ref request) == 0 ? (request.monitorFriendlyDeviceName ?? "") : "";
         }
 
+        static bool IsCloaked(IntPtr hWnd)
+        {
+            try
+            {
+                int cloaked;
+                return DwmGetWindowAttribute(hWnd, DWMWA_CLOAKED, out cloaked, 4) == 0 && cloaked != 0;
+            }
+            catch (Exception) { return false; }   // no DWM on this Windows
+        }
+
         static string GetProcessPath(uint processId)
         {
             IntPtr process = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, processId);
@@ -418,6 +441,9 @@ namespace TerminalToTV
         // ---- Win32 ------------------------------------------------------------------------
 
         const uint GW_OWNER = 4;
+        const int GWL_EXSTYLE = -20;
+        const int WS_EX_TOOLWINDOW = 0x80;
+        const int DWMWA_CLOAKED = 14;
         const int SW_MAXIMIZE = 3;
         const int SW_RESTORE = 9;
         const uint SWP_NOACTIVATE = 0x0010;
@@ -489,6 +515,8 @@ namespace TerminalToTV
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetWindowText(IntPtr hWnd, StringBuilder text, int maxCount);
         [DllImport("user32.dll", CharSet = CharSet.Unicode)] static extern int GetClassName(IntPtr hWnd, StringBuilder name, int maxCount);
         [DllImport("user32.dll")] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
+        [DllImport("user32.dll", EntryPoint = "GetWindowLongW")] static extern int GetWindowLong(IntPtr hWnd, int index);
+        [DllImport("dwmapi.dll")] static extern int DwmGetWindowAttribute(IntPtr hWnd, int attribute, out int value, int size);
         [DllImport("user32.dll")] static extern bool IsIconic(IntPtr hWnd);
         [DllImport("user32.dll")] static extern bool IsZoomed(IntPtr hWnd);
         [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int command);
@@ -524,13 +552,76 @@ function Test-Contains([string]$Text, [string]$Part) {
     return [bool]$Text -and $Text.IndexOf($Part, [StringComparison]::OrdinalIgnoreCase) -ge 0
 }
 
-function Read-Choice([string]$Question, [int]$Count) {
-    $answer = Read-Host "   $Question"
+function Read-Number([int]$Min, [int]$Max) {
+    $answer = Read-Host '   Number type panni Enter press pannunga'
     $number = 0
-    if (-not [int]::TryParse($answer, [ref]$number) -or $number -lt 1 -or $number -gt $Count) {
-        Stop-WithError "'$answer' is not a number from the list."
+    if (-not [int]::TryParse($answer, [ref]$number) -or $number -lt $Min -or $number -gt $Max) {
+        Stop-WithError "'$answer' list-la illadha number. Thirumba run panni list-la irukkura number kudunga."
     }
-    return $number - 1
+    return $number
+}
+
+function Test-IsTerminal($Window) {
+    return ($TerminalProcessNames -contains $Window.ProcessName) -or ($Window.ClassName -like 'MetaQuotes::MetaTrader*')
+}
+
+function Show-WindowList($List) {
+    for ($i = 0; $i -lt $List.Count; $i++) {
+        Write-Info ('[{0}] {1}' -f ($i + 1), $List[$i].Title)
+        if ($List[$i].ProcessPath) { Write-Host ('       {0}' -f $List[$i].ProcessPath) -ForegroundColor DarkGray }
+    }
+}
+
+function Save-Choice($Window) {
+    try {
+        $folder = Split-Path -Parent $ChoiceFile
+        if (-not (Test-Path -LiteralPath $folder)) { New-Item -ItemType Directory -Path $folder -Force | Out-Null }
+        Set-Content -LiteralPath $ChoiceFile -Value @($Window.ProcessPath, $Window.Title) -Encoding UTF8
+        Write-Info 'Sari! Adutha thadava idhe terminal automatic-ah TV-ku pogum.'
+        Write-Info '(Vera terminal venum-na TerminalToTV-choose.bat double-click pannunga.)'
+    }
+    catch { }
+}
+
+# The terminal picked last time: same program file (unique per MT5 install), else same title.
+function Find-RememberedWindow($Candidates) {
+    if (-not (Test-Path -LiteralPath $ChoiceFile)) { return $null }
+    $saved = @(Get-Content -LiteralPath $ChoiceFile -Encoding UTF8)
+    $path = if ($saved.Count -ge 1) { $saved[0] } else { '' }
+    $title = if ($saved.Count -ge 2) { $saved[1] } else { '' }
+    $samePath = @($Candidates | Where-Object { $_.ProcessPath -eq $path })
+    if ($path -and $samePath.Count -eq 1) { return $samePath[0] }
+    $same = @($samePath | Where-Object { $_.Title -eq $title })
+    if ($same.Count -gt 0) { return $same[0] }
+    return $null
+}
+
+# Numbered list to pick from: the terminals, or every open window when no terminal was recognised.
+function Select-Window($Terminals, $Others) {
+    $list = @($Terminals)
+    $rest = @($Others)
+    if ($list.Count -eq 0) {
+        if ($rest.Count -eq 0) { Stop-WithError 'Endha window-um open-ah illa. MT5-ai open panni thirumba run pannunga.' }
+        Write-Step 'MT5 terminal-ai automatic-ah kandupidikka mudiyala. Open-ah irukkura windows-la unga terminal endha number?'
+        $list = $rest
+        $rest = @()
+    }
+    else {
+        Write-Step 'Endha terminal TV-ku poganum?'
+    }
+    Show-WindowList $list
+    if ($rest.Count -gt 0) { Write-Info '[0] Vera window (unga terminal indha list-la illa-na)' }
+
+    $number = Read-Number $(if ($rest.Count -gt 0) { 0 } else { 1 }) $list.Count
+    if ($number -eq 0) {
+        Write-Step 'Open-ah irukkura mathha windows:'
+        Show-WindowList $rest
+        $list = $rest
+        $number = Read-Number 1 $list.Count
+    }
+    $window = $list[$number - 1]
+    Save-Choice $window
+    return $window
 }
 
 # Finds the terminal window to show on the TV.
@@ -539,37 +630,35 @@ function Find-Terminal {
         $_.ProcessId -ne $PID -and -not (Test-Contains $_.Title 'TerminalToTV')
     })
 
-    # One main window per running MetaTrader terminal.
+    # One main window per running MetaTrader terminal (MT5's main window class is MetaQuotes::MetaTrader::5.00).
     $terminals = @()
-    foreach ($group in @($windows | Where-Object { $TerminalProcessNames -contains $_.ProcessName } | Group-Object ProcessId)) {
+    foreach ($group in @($windows | Where-Object { Test-IsTerminal $_ } | Group-Object ProcessId)) {
         $main = @($group.Group | Where-Object { $_.ClassName -like 'MetaQuotes::MetaTrader*' })
         if ($main.Count -gt 0) { $terminals += $main[0] } else { $terminals += $group.Group[0] }
     }
+    # Every other normal app window, in case the terminal is not recognised as MetaTrader.
+    $others = @($windows | Where-Object {
+        -not (Test-IsTerminal $_) -and -not $_.IsCloaked -and -not $_.IsToolWindow -and
+        @('Progman', 'WorkerW', 'Shell_TrayWnd', 'Shell_SecondaryTrayWnd') -notcontains $_.ClassName
+    })
 
     if ($Match) {
         $found = @($terminals | Where-Object { (Test-Contains $_.Title $Match) -or (Test-Contains $_.ProcessPath $Match) })
-        if ($found.Count -eq 0) {
-            # Not a MetaTrader terminal? Then any window with that text in its title (e.g. a web terminal).
-            $found = @($windows | Where-Object { Test-Contains $_.Title $Match })
-        }
-        if ($found.Count -eq 0) {
-            Stop-WithError "No open window matches '$Match'. Open the terminal first, or check the name / account number."
-        }
+        if ($found.Count -eq 0) { $found = @($others | Where-Object { Test-Contains $_.Title $Match }) }
+        if ($found.Count -eq 1) { return $found[0] }
+        if ($found.Count -gt 1) { return (Select-Window $found @()) }
+        Write-Info "('$Match' endha terminal title-layum folder-layum illa - adhanaala list-la irundhu edukkalaam.)"
     }
-    else {
-        $found = $terminals
-        if ($found.Count -eq 0) { Stop-WithError 'No MT5 / MT4 terminal is open. Open it first, then run this again.' }
-    }
-    if ($found.Count -eq 1) { return $found[0] }
 
-    Write-Step 'More than one terminal is open. Which one should go to the TV?'
-    for ($i = 0; $i -lt $found.Count; $i++) {
-        Write-Info ('[{0}] {1}' -f ($i + 1), $found[$i].Title)
-        if ($found[$i].ProcessPath) { Write-Host ('       {0}' -f $found[$i].ProcessPath) -ForegroundColor DarkGray }
+    if (-not $Choose) {
+        $remembered = Find-RememberedWindow @($terminals + $others)
+        if ($remembered) {
+            Write-Info '(Munnaadi select panna terminal. Maathanum-na TerminalToTV-choose.bat)'
+            return $remembered
+        }
+        if ($terminals.Count -eq 1) { return $terminals[0] }
     }
-    $terminal = $found[(Read-Choice 'Type the number and press Enter' $found.Count)]
-    Write-Info "Tip: to skip this question next time, put a part of the name or the account number in `$Match at the top of TerminalToTV.ps1."
-    return $terminal
+    return (Select-Window $terminals $others)
 }
 
 function Test-Extended($Displays) {
@@ -579,16 +668,16 @@ function Test-Extended($Displays) {
 # Makes sure the TV is connected and in Extend mode. Returns the list of displays.
 function Connect-TV {
     if ([TerminalToTV.Native]::CountConnectedScreens() -lt 2) {
-        Write-Step 'The TV is not connected yet. Opening the Windows Cast panel - click your TV there.'
-        Write-Info '(If no panel opens, press Win+K.)'
+        Write-Step 'TV innum connect aagala. Windows Cast panel open aagudhu - angae unga TV-ai click pannunga.'
+        Write-Info '(Panel varala-na Win+K press pannunga.)'
         Start-Process -FilePath "$env:WINDIR\explorer.exe" -ArgumentList 'ms-settings-connectabledevices:devicediscovery'
 
         $deadline = (Get-Date).AddSeconds($WaitSeconds)
         while ([TerminalToTV.Native]::CountConnectedScreens() -lt 2) {
             if ((Get-Date) -gt $deadline) {
-                Stop-WithError ("The TV did not connect within $WaitSeconds seconds.`n" +
-                    "         Connect it with Windows Cast (Win+K) or an HDMI cable, then run this again.`n" +
-                    "         (Casting from the Chrome browser / Chromecast can only mirror the screen.)")
+                Stop-WithError ("$WaitSeconds seconds-la TV connect aagala.`n" +
+                    "         Win+K press panni TV-ai connect pannunga (illa HDMI cable), appuram thirumba run pannunga.`n" +
+                    "         (Chrome browser / Chromecast-la cast panna mirror mattum dhaan aagum.)")
             }
             Start-Sleep -Seconds 1
         }
@@ -596,16 +685,16 @@ function Connect-TV {
         $deadline = (Get-Date).AddSeconds(10)
         while ([TerminalToTV.Native]::CountActiveScreens() -lt 2 -and (Get-Date) -lt $deadline) { Start-Sleep -Milliseconds 500 }
         Start-Sleep -Seconds 2
-        Write-Info 'TV connected.'
+        Write-Info 'TV connect aayiduchu.'
     }
 
     $displays = @([TerminalToTV.Native]::GetDisplays())
     if (Test-Extended $displays) { return $displays }
 
-    Write-Step 'Switching the TV from Mirror (Duplicate) to Extend, so it becomes a separate screen...'
+    Write-Step 'TV-ai Mirror (Duplicate)-la irundhu Extend-ku maathuren (TV thani screen aagum)...'
     $result = [TerminalToTV.Native]::ExtendDesktop()
     if ($result -ne 0) {
-        Write-Info "Windows did not switch by itself (code $result). In the menu that opens, click 'Extend'."
+        Write-Info "Windows thaana maathala (code $result). Ippo open aagura menu-la 'Extend' click pannunga."
         Start-Process -FilePath 'DisplaySwitch.exe'
     }
     $deadline = (Get-Date).AddSeconds(30)
@@ -614,7 +703,7 @@ function Connect-TV {
         $displays = @([TerminalToTV.Native]::GetDisplays())
     } while (-not (Test-Extended $displays) -and (Get-Date) -lt $deadline)
     if ($displays.Count -lt 2) {
-        Stop-WithError "The TV is still mirroring. Press Win+P, choose 'Extend', then run this again."
+        Stop-WithError "TV innum mirror mode-la dhaan irukku. Win+P press panni 'Extend' click pannunga, appuram thirumba run pannunga."
     }
     Start-Sleep -Seconds 1
     return @([TerminalToTV.Native]::GetDisplays())
@@ -624,22 +713,22 @@ function Connect-TV {
 function Select-TV($Displays) {
     $list = @($Displays | Sort-Object @{ Expression = { $_.IsPrimary }; Descending = $true }, @{ Expression = { $_.Left }; Ascending = $true })
 
-    Write-Step 'Displays:'
+    Write-Step 'Screens:'
     for ($i = 0; $i -lt $list.Count; $i++) {
         $display = $list[$i]
         $name = if ($display.Name) { $display.Name } else { '(no name)' }
-        $role = if ($display.IsPrimary) { 'main PC screen' } else { '' }
+        $role = if ($display.IsPrimary) { 'PC main screen' } else { '' }
         Write-Info ('[{0}] {1,-26} {2,5} x {3,-5} {4,-16} {5}' -f ($i + 1), $name, $display.Width, $display.Height, $display.Connection, $role)
     }
 
     if ($Monitor) {
         $number = 0
         if ([int]::TryParse($Monitor, [ref]$number)) {
-            if ($number -lt 1 -or $number -gt $list.Count) { Stop-WithError "-Monitor $Monitor is not in the Displays list above." }
+            if ($number -lt 1 -or $number -gt $list.Count) { Stop-WithError "-Monitor $Monitor mela irukkura Screens list-la illa." }
             return $list[$number - 1]
         }
         $named = @($list | Where-Object { (Test-Contains $_.Name $Monitor) -or (Test-Contains $_.DeviceName $Monitor) })
-        if ($named.Count -eq 0) { Stop-WithError "No display in the list above has '$Monitor' in its name." }
+        if ($named.Count -eq 0) { Stop-WithError "'$Monitor' endra per mela irukkura Screens list-la illa." }
         return $named[0]
     }
 
@@ -647,14 +736,14 @@ function Select-TV($Displays) {
     if ($wireless.Count -gt 0) { return $wireless[0] }
     $others = @($list | Where-Object { -not $_.IsPrimary })
     if ($others.Count -eq 1) { return $others[0] }
-    Write-Info '(If your TV is not in this list, connect it with Win+K first.)'
-    return $list[(Read-Choice 'Which number is the TV? Type it and press Enter' $list.Count)]
+    Write-Step 'Indha screens-la TV endha number? (TV list-la illa-na, mudhalla Win+K-la connect pannunga.)'
+    return $list[(Read-Number 1 $list.Count) - 1]
 }
 
 # ---- main ----------------------------------------------------------------------------------
 
 try { $Host.UI.RawUI.WindowTitle = 'TerminalToTV' } catch { }
-Write-Host 'TerminalToTV - only the trading terminal on the TV' -ForegroundColor Green
+Write-Host 'TerminalToTV - TV-la trading terminal mattum' -ForegroundColor Green
 
 $terminal = Find-Terminal
 Write-Step "Terminal: $($terminal.Title)"
@@ -662,23 +751,23 @@ Write-Step "Terminal: $($terminal.Title)"
 for ($attempt = 1; $attempt -le 2; $attempt++) {
     $tv = Select-TV (Connect-TV)
     $tvName = if ($tv.Name) { $tv.Name } else { $tv.DeviceName }
-    Write-Step "Moving the terminal to the TV ($tvName)..."
+    Write-Step "Terminal-ai TV-ku ($tvName) move panren..."
 
     $problem = [TerminalToTV.Native]::MoveToDisplay($terminal.Handle, $tv.DeviceName)
     if ($problem) {
         if ($problem -like '*(error 5)*') {
-            $problem += "`n         MT5 runs 'as administrator', so this must too: right-click TerminalToTV.bat, 'Run as administrator'."
+            $problem += "`n         MT5 'Run as administrator'-la open aagi irukku. TerminalToTV.bat-aiyum right-click -> 'Run as administrator' pannunga."
         }
-        Stop-WithError "Could not move the terminal: $problem"
+        Stop-WithError "Terminal-ai move panna mudiyala: $problem"
     }
 
     Start-Sleep -Seconds 2
     if ([TerminalToTV.Native]::IsOnDisplay($terminal.Handle, $tv.DeviceName)) {
-        Write-Host "`nDone! The terminal is on the TV - the PC screen is free for your other work." -ForegroundColor Green
-        Write-Info 'Tip: press F11 in MT5 for a full-screen chart. Disconnect the TV (Win+K) to bring the terminal back.'
+        Write-Host "`nMudinjadhu! Terminal ippo TV-la irukku. PC screen-la neenga vera vela paakalam." -ForegroundColor Green
+        Write-Info 'Tip: MT5-la F11 press panna chart full-screen aagum. TV disconnect (Win+K) panna terminal PC-ku thirumbi varum.'
         Start-Sleep -Seconds 5
         exit 0
     }
-    Write-Info 'Windows changed the screen setup meanwhile - trying once more...'
+    Write-Info 'Windows screen setup-ai maathiduchu - innoru thadava try panren...'
 }
-Stop-WithError "The terminal did not stay on the TV. Press Win+P, choose 'Extend', then run this again."
+Stop-WithError "Terminal TV-la nikkala. Win+P press panni 'Extend' click pannunga, appuram thirumba run pannunga."

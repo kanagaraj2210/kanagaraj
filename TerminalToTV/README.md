@@ -14,30 +14,35 @@ PC screen-la neenga vera vela paakalam (Chrome, MetaEditor, etc.). TV-la trading
 | File | Enna panradhu |
 |---|---|
 | `TerminalToTV.bat` | Idhai double-click pannunga. Idhu dhaan start button. |
-| `TerminalToTV.ps1` | Main script (PowerShell). Windows-la already irukku, edhuvum install panna theva illa. |
+| `TerminalToTV-choose.bat` | Vera terminal-ai TV-ku anuppanum-na idhai double-click pannunga (list-la irundhu thirumba choose panna). |
+| `TerminalToTV.ps1` | Main script (PowerShell). Windows-la already irukku, edhuvum install panna theva illa. Idhai double-click panna vendaam. |
 
 ## One-time setup
 
 1. GitHub repo page → green **Code** button → **Download ZIP** → extract pannunga.
    `TerminalToTV` folder-ai PC-la oru idathula vainga, e.g. `C:\TerminalToTV\`.
-2. `TerminalToTV.bat` → right-click → **Properties** → keezha **Unblock** tick irundha tick pannunga → **OK**.
+2. Rendu `.bat` files-kum: right-click → **Properties** → keezha **Unblock** tick irundha tick pannunga → **OK**.
 3. `TerminalToTV.bat` → right-click → **Send to → Desktop (create shortcut)**.
    Desktop shortcut-ku **MT5 to TV** nu per vainga.
-4. *(Oru MT5 mattum open-ah irundha indha step skip pannalaam.)*
-   Neraiya MT5 terminals open-ah irundha, `TerminalToTV.ps1`-ai Notepad-la open panni indha line-ai maathunga:
+4. Script-la edhuvum edit panna theva illa.
 
-   ```powershell
-   [string]$Match = '',
-   ```
+## Endha terminal TV-ku pogum?
 
-   Unga terminal-oda folder name illa account number podunga, udharanam:
+- **Oru MT5 mattum open-ah irundha:** adhu automatic-ah TV-ku pogum.
+- **Neraiya MT5 terminals open-ah irundha:** first time script oru list kaattum:
 
-   ```powershell
-   [string]$Match = 'Kalpana',
-   ```
+  ```
+  >> Endha terminal TV-ku poganum?
+     [1] 51234567: ICMarketsSC-Live07 - Hedge - ... - [XAUUSD,M5]
+     [2] 7001234: Exness-MT5Real - Hedge - ... - [EURUSD,H1]
+     Number type panni Enter press pannunga : 2
+  ```
 
-   Ippo "Kalpana" terminal mattum dhaan TV-ku pogum. (Folder name: MT5 install aana folder,
-   e.g. `C:\Program Files\MetaTrader 5 Kalpana\`. Account number: MT5 title bar-la irukkum.)
+  Kalpana terminal-oda number-ai (title bar-la irukkura account number-ai vechu kandupidikkalaam)
+  type panni Enter press pannunga. Script adhai **nyabagam vechukkum**, adutha thadava kekkaadhu.
+- **Vera terminal-ku maathanum-na:** `TerminalToTV-choose.bat` double-click pannunga.
+- **List-la unga terminal illa-na:** `0` type pannunga. PC-la open-ah irukkura ella windows-um varum,
+  adhula unga terminal-oda number-ai kudunga.
 
 ## Daily use
 
@@ -68,30 +73,36 @@ Script indha 4 steps-aiyum one click-la pannudhu.
 
 | Option | Enna | Example |
 |---|---|---|
-| `-Match` | Endha terminal TV-ku poganum (folder name / account number / window title-la irukkura text) | `-Match "Kalpana"` |
-| `-Monitor` | Endha screen TV (script print panra **Displays** list-la irukkura number, illa TV name) | `-Monitor 2` |
+| `-Match` | Endha terminal (account number / folder name / window title-la irukkura text). Match aagala-na script list kaattum. | `-Match "51234567"` |
+| `-Monitor` | Endha screen TV (script print panra **Screens** list-la irukkura number, illa TV name) | `-Monitor 2` |
 | `-WaitSeconds` | TV connect aaga evvalavu seconds wait pannanum (default 90) | `-WaitSeconds 120` |
+| `-Choose` | Terminal list-ai thirumba kaattum (`TerminalToTV-choose.bat` idhai dhaan pannudhu) | `-Choose` |
 
 Rendu terminals-ku rendu shortcuts venum-na: `.bat` file-ai copy panni (e.g. `Kalpana-to-TV.bat`),
-ovvonnulayum vera `-Match` kudunga.
+ovvonnulayum vera `-Match` kudunga (account number best, adhu title bar-la irukkum).
 
 ## Problems?
 
 | Problem | Solution |
 |---|---|
-| `Could not move the terminal ... error 5` | MT5-ai **Run as administrator**-la open panni irundha, `TerminalToTV.bat`-aiyum right-click → **Run as administrator**. |
+| Black window varala / Notepad open aagudhu | `.ps1` illa, **`TerminalToTV.bat`**-ai dhaan double-click pannanum. Blue "Windows protected your PC" vandha: **More info → Run anyway**. |
+| List-la unga terminal illa | `0` type panni ella windows-um paarunga. MT5 open-ah irukkaa nu check pannunga. |
+| `Terminal-ai move panna mudiyala ... error 5` | MT5-ai **Run as administrator**-la open panni irundha, `TerminalToTV.bat`-aiyum right-click → **Run as administrator**. |
 | Cast panel-la TV varala | TV-la *Screen Mirroring / Screen Share / Miracast* on pannunga. PC-um TV-um same Wi-Fi-la irukkanum. |
-| `The TV did not connect within 90 seconds` | Chrome browser-la irundhu Chromecast / Google TV-ku cast panreengana, adhu Windows-ku oru screen-ah theriyaadhu, mirror mattum dhaan mudiyum. Windows Cast (`Win + K`, Miracast) illa HDMI cable use pannunga. |
-| Terminal thappana screen-ku pogudhu | Script print panra **Displays** list-la TV-oda number paarunga, `-Monitor <number>` kudunga. |
+| `90 seconds-la TV connect aagala` | Chrome browser-la irundhu Chromecast / Google TV-ku cast panreengana, adhu Windows-ku oru screen-ah theriyaadhu, mirror mattum dhaan mudiyum. Windows Cast (`Win + K`, Miracast) illa HDMI cable use pannunga. |
+| Terminal thappana screen-ku pogudhu | Script print panra **Screens** list-la TV-oda number paarunga, `-Monitor <number>` kudunga. |
 | TV-la taskbar theriyudhu | Settings → Personalization → Taskbar → Taskbar behaviors → **Show my taskbar on all displays** off pannunga. Illa MT5-la `F11`. |
 
 ## How it works (technical)
 
-1. Counts connected screens with `QueryDisplayConfig`. If only the PC screen is connected, it opens the
+1. Finds the terminal: MetaTrader windows (process `terminal64.exe` / `terminal.exe`, or window class
+   `MetaQuotes::MetaTrader::*`), narrowed by `-Match` when it matches. With several terminals, or none
+   recognised, it shows a numbered list; the pick is remembered in `%LOCALAPPDATA%\TerminalToTV\terminal.txt`
+   (by program path, so it survives title changes).
+2. Counts connected screens with `QueryDisplayConfig`. If only the PC screen is connected, it opens the
    Cast panel (`ms-settings-connectabledevices:devicediscovery`, same as `Win + K`) and waits.
-2. If the TV is mirrored, it calls `SetDisplayConfig(SDC_TOPOLOGY_EXTEND | SDC_APPLY)`, the same thing
+3. If the TV is mirrored, it calls `SetDisplayConfig(SDC_TOPOLOGY_EXTEND | SDC_APPLY)`, the same thing
    `Win + P` → **Extend** does. If that fails, it opens the `Win + P` menu for you.
-3. Picks the TV: the wireless (Miracast) screen, otherwise the only non-main screen, otherwise asks.
-4. Finds the terminal window (`terminal64.exe` / `terminal.exe`, filtered by `-Match`), restores it,
-   moves it onto the TV with `SetWindowPos` (in physical pixels, so different Windows scaling on the PC
-   and the TV doesn't matter), maximizes it, and checks that it stayed there.
+4. Picks the TV: the wireless (Miracast) screen, otherwise the only non-main screen, otherwise asks.
+5. Restores the terminal window, moves it onto the TV with `SetWindowPos` (in physical pixels, so
+   different Windows scaling on the PC and the TV doesn't matter), maximizes it, and checks that it stayed there.
