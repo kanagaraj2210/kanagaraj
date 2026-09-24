@@ -18,9 +18,9 @@ PC screen-la neenga vera vela paakalam (Chrome, MetaEditor, etc.). TV-la trading
 
 ## One-time setup
 
-1. Rendu files-aiyum PC-la oru folder-la vainga, e.g. `C:\TerminalToTV\`.
-2. Internet-la irundhu download pannirundha: `TerminalToTV.bat` → right-click → **Properties** →
-   keezha **Unblock** tick pannunga → **OK**.
+1. GitHub repo page → green **Code** button → **Download ZIP** → extract pannunga.
+   `TerminalToTV` folder-ai PC-la oru idathula vainga, e.g. `C:\TerminalToTV\`.
+2. `TerminalToTV.bat` → right-click → **Properties** → keezha **Unblock** tick irundha tick pannunga → **OK**.
 3. `TerminalToTV.bat` → right-click → **Send to → Desktop (create shortcut)**.
    Desktop shortcut-ku **MT5 to TV** nu per vainga.
 4. *(Oru MT5 mattum open-ah irundha indha step skip pannalaam.)*
