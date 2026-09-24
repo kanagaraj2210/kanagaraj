@@ -49,6 +49,12 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+# Unexpected errors: show a short message instead of a wall of red text.
+trap {
+    Write-Host "`nPROBLEM: $($_.Exception.Message)" -ForegroundColor Red
+    exit 1
+}
+
 # Process names of MetaTrader terminals: MT5, MT4.
 $TerminalProcessNames = @('terminal64', 'terminal')
 
@@ -660,8 +666,10 @@ for ($attempt = 1; $attempt -le 2; $attempt++) {
 
     $problem = [TerminalToTV.Native]::MoveToDisplay($terminal.Handle, $tv.DeviceName)
     if ($problem) {
-        Stop-WithError ("Could not move the terminal: $problem`n" +
-            "         If MT5 runs 'as administrator', right-click TerminalToTV.bat and choose 'Run as administrator'.")
+        if ($problem -like '*(error 5)*') {
+            $problem += "`n         MT5 runs 'as administrator', so this must too: right-click TerminalToTV.bat, 'Run as administrator'."
+        }
+        Stop-WithError "Could not move the terminal: $problem"
     }
 
     Start-Sleep -Seconds 2

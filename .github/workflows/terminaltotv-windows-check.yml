@@ -95,6 +95,7 @@ jobs:
           Stop-Process -Id $p.Id
           if ($code -ne 1 -or $out -notmatch 'Terminal: .*Notepad' -or $out -notmatch 'did not connect') { throw 'unexpected result' }
           'script behaved as expected'
+          exit 0
 
       - name: The .bat launcher (pause on error must not hang)
         shell: powershell
@@ -106,6 +107,7 @@ jobs:
           Stop-Process -Id $p.Id
           if ($out -notmatch 'did not connect') { throw 'bat did not run the script' }
           'bat launcher OK'
+          exit 0
 
       - name: Real MetaTrader 5 window (install MT5, detect it, move it)
         shell: powershell
@@ -129,3 +131,6 @@ jobs:
           $w = @([TerminalToTV.Native]::GetWindows() | Where-Object ProcessName -eq 'terminal64')
           $d = @([TerminalToTV.Native]::GetDisplays())[0]
           foreach ($x in $w) { "move MT5 window '$($x.Title)' -> '" + [TerminalToTV.Native]::MoveToDisplay($x.Handle, $d.DeviceName) + "'" }
+          if ($out -notmatch 'Terminal: ' -or $out -notmatch 'did not connect') { throw 'script did not find the MT5 terminal' }
+          'MT5 terminal found and moved'
+          exit 0
