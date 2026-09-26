@@ -24,9 +24,13 @@ Rendu vazhi irukku:
    mela right side-la **Copy raw file** button click pannunga (code ellam copy aagum).
 2. **Kalpana MT5 terminal**-la `F4` press pannunga → **MetaEditor** open aagum.
    (Andha terminal-la irundhe open pannanum. Ovvoru terminal-kum thani data folder irukku.)
-3. MetaEditor-la **File → New** (`Ctrl+N`) → **Script** → **Next** → Name: `TerminalToTV` → **Finish**.
+3. MetaEditor-la **File → New** (`Ctrl+N`) → **Script** → **Next** → **Name** box-la `Scripts\TerminalToTV`
+   type pannunga (`Scripts\` kandippa irukkanum; illa-na file `Scripts` folder-ku veliya save aagi
+   MT5 Navigator-la varaadhu) → **Finish**.
 4. Ulla irukkura code ellathaiyum delete panni (`Ctrl+A`, `Delete`), copy panna code-ai paste pannunga (`Ctrl+V`).
 5. **Compile** (`F7`) press pannunga. Keezha `0 errors, 0 warnings` varanum.
+   MetaEditor **Navigator**-la `TerminalToTV.mq5` **Scripts** folder-**kulla** irukkanum. `MQL5` kitta
+   (Scripts-ku veliya) irundha: **File → Save As** → **Scripts** folder double-click → **Save** → `F7`.
 6. *(Optional)* MT5 **Navigator → Scripts → TerminalToTV** → right-click → **Set hotkey** (e.g. `Ctrl+T`).
    Appuram oru key press-la TV-ku pogum.
 
@@ -109,6 +113,7 @@ Rendu vazhi irukku:
 | Problem | Solution |
 |---|---|
 | ZIP / `.bat` download-la "Virus detected" | Windows Defender false positive (PowerShell launcher pattern; latest Defender signatures-la scan panna clean dhaan). **Vazhi 1** (MT5 script) use pannunga: code-ai copy panni MetaEditor-la paste pannalaam, download theva illa. |
+| MT5 Navigator → Scripts-la `TerminalToTV` varala | File `Scripts` folder-la illa (MetaEditor Navigator-la `MQL5` kitta, Scripts-ku veliya irukkum). MetaEditor-la adhu open-ah irukkum bodhu **File → Save As** → **Scripts** folder double-click → **Save** → `F7`. Appuram MT5 Navigator → **Scripts** → right-click → **Refresh**. Innum varala-na MetaEditor vera terminal-oda: Kalpana terminal-la irundhe `F4` (illa toolbar-la **IDE**) press panni thirumba pannunga. |
 | MT5 script: "DLL imports is not allowed" / script run aagala | Dialog-la **Allow DLL imports** tick pannunga. Illa Tools → Options → Expert Advisors → **Allow DLL imports**. |
 | Cast panel-la TV varala | TV-la *Screen Mirroring / Screen Share / Miracast* on pannunga. PC-um TV-um same Wi-Fi-la irukkanum. |
 | "TV connect aagala" | Chrome browser-la irundhu Chromecast / Google TV-ku cast panreengana, adhu Windows-ku oru screen-ah theriyaadhu, mirror mattum dhaan mudiyum. Windows Cast (`Win + K`, Miracast) illa HDMI cable use pannunga. |
